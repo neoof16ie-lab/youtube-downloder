@@ -1,0 +1,79 @@
+name: yt-dlp to Hugging Face Premium Uploader
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: '動画のURL'
+        required: true
+        type: string
+      client_id:
+        required: true
+        type: string
+
+jobs:
+  download-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Tools & HF CLI
+        run: |
+          sudo wget https://github.com -O /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+          sudo apt-get update && sudo apt-get install -y ffmpeg python3-pip
+          pip3 install huggingface_hub requests
+
+      # ★ダウンロードを実行しつつ、％進捗データをリアルタイムにHugging Faceに送信
+      - name: Download Video & Stream Progress
+        run: |
+          mkdir output
+          # 1行ずつ出力をパースして、％が含まれる行を即座に通知サービスへポスト
+          yt-dlp -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]" -o "output/%(title)s.%(ext)s" "${{ github.event.inputs.video_url }}" | while read -r line; do
+            echo "$line"
+            if [[ "$line" =~ ([0-9.]+)% ]]; then
+              PERCENT="${BASH_REMATCH[1]}"
+              curl -s -d "{\"type\":\"progress\",\"percent\":\"$PERCENT\"}" "https://ntfy.sh{{ github.event.inputs.client_id }}"
+            fi
+          done
+
+      # ★Hugging Faceの50GBストレージへ直接書き込み、完了したら確定URLと30分タイマーを通知
+      - name: Upload directly to Hugging Face Storage & Notify Success
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 -c "
+          import os, glob, urllib.parse, requests, json
+          from huggingface_hub import HfApi
+          
+          # 🛠️ ★ここにあなたの【HFユーザー名/Space名】を入れてください（例: 'tanaka/ytdlp-ui'）
+          REPO_ID = 'あなたのHugging Faceユーザー名/あなたのSpace名'
+          DELETE_AFTER_MS = 30 * 60 * 1000 # 30分
+          
+          api = HfApi(token=os.environ['HF_TOKEN'])
+          files = glob.glob('output/*')
+          
+          if files:
+              video_path = files[0]
+              filename = os.path.basename(video_path)
+              
+              # ステータス通知
+              requests.post('https://ntfy.sh{{ github.event.inputs.client_id }}', data=json.dumps({'type':'status', 'message':'Hugging Faceの50GBスペースへ保存中...'}).encode('utf-8'))
+              
+              # 50GBストレージへアップロード
+              api.upload_file(
+                  path_or_fileobj=video_path,
+                  path_in_repo=f'downloads/{filename}',
+                  repo_id=REPO_ID,
+                  repo_type='space'
+              )
+              
+              # 直接ファイルをダウンロードできる確定URLを生成
+              encoded_filename = urllib.parse.quote(filename)
+              hf_public_url = f'https://huggingface.co{REPO_ID}/resolve/main/downloads/{encoded_filename}'
+              
+              # 完了通知と30分タイマー(ttl)を送信
+              success_data = json.dumps({'type':'success', 'url':hf_public_url, 'ttl':DELETE_AFTER_MS})
+              requests.post('https://ntfy.sh{{ github.event.inputs.client_id }}', data=success_data.encode('utf-8'))
+              
+              print('全処理が完了しました！')
+          "

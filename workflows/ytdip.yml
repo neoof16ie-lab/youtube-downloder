@@ -1,0 +1,45 @@
+name: ytdlp to storage.to Cloud Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: '動画のURLを入力してください'
+        required: true
+        type: string
+
+jobs:
+  download-and-upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Tools & Dependencies
+        run: |
+          sudo wget https://github.com -O /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install requests
+
+      - name: Run Python Downloader App
+        env:
+          VIDEO_URL: ${{ github.event.inputs.video_url }}
+        run: |
+          python app.py
+ - name: Commit and Push History Logs
+        run: |
+          git config --local user.email "github-actions[bot]@://github.com"
+          git config --local user.name "github-actions[bot]"
+          if [ -f history.txt ]; then
+            git add history.txt
+            git commit -m "Update download history log [skip ci]" || echo "No changes to commit"
+            git push origin main || echo "No changes to push"
+          fi

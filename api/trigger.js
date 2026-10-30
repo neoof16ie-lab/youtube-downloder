@@ -16,13 +16,11 @@ export default async function handler(req, res) {
 
   const { video_url } = req.body;
   
-  // 🛠️ あなたの実際のGitHubユーザー名（URLにある名前）に書き換えてください
-  const GITHUB_USER = "youtube-a3e4"; 
-  const GITHUB_REPO = "youtube-downloder";
-  
   // Vercelの隠し金庫（環境変数）からトークンを安全に抽出
+  const TOKEN = process.env.GITHUB_USER;
+  const TOKEN = process.env.GITHUB_REPO;
   const TOKEN = process.env.GITHUB_TOKEN; 
-
+  
   try {
     // あなたが教えてくれた正しい /dispatches 宛てに、Vercelのサーバー内部から通信を安全に送信
     const response = await fetch(`https://github.com{GITHUB_USER}/${GITHUB_REPO}/dispatches`, {

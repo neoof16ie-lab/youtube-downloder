@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     });
 
     // GitHubから返ってきたステータスコードをそのままフロントへ返す
-  return res.status(response.status).end();
+  return res.status(response.status).json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'GitHub Actionsへの接続に失敗しました' });
   }

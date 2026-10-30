@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>yt-dlp Cloud Downloader</title>
+</head>
+<body>
+  <h2>yt-dlp Cloud Downloader</h2>
+  
+  <!-- 🚥 GitHub応答コードの表示窓 -->
+  <p>GitHub応答コード: <span id="http-status-code">---</span></p>
+  <p id="status">URLを入力してください</p>
+
+  <input type="text" id="video-url" placeholder="動画のURLをペースト">
+  <button id="dl-btn">動画を取得して50GBストレージに保存</button>
+
+  <!-- 🛠️ 処理を行う外部スクリプトを読み込む（type="module"必須） -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -25,7 +25,7 @@ filename = os.path.basename(video_path)
 video_title = os.path.splitext(filename)[0]
 
 print(f"📦 storage.to へアップロード中: {filename}")
-upload_url = "https://storage.to"
+upload_url = "https://storage.to/api"
 
 try:
     with open(video_path, 'rb') as f:

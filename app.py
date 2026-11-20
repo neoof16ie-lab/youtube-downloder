@@ -3,6 +3,7 @@ import os
 import glob
 import datetime
 import requests
+import ffmpeg
 
 # 1. 環境変数から動画のURLを取得
 video_url = os.environ.get("VIDEO_URL")

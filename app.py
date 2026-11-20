@@ -37,15 +37,7 @@ try:
         result = response.json()
         storage_url = result.get("url")
         print(f"🎉 アップロード成功！ URL: {storage_url}")
-        
-        # 4. 自分専用の履歴ファイル (history.txt) に自動追記
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_line = f"[{now}] {video_title} -> {storage_url}\n"
-        
-        with open("history.txt", "a", encoding="utf-8") as log_file:
-            log_file.write(log_line)
-        print("📝 history.txt にダウンロードURLを記録しました。")
-        
+       
     else:
         print(f"❌ アップロード失敗 (HTTP {response.status_code})")
         exit(1)

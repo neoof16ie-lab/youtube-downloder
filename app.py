@@ -1,3 +1,4 @@
+pip install ffmpeg-python
 import os
 import glob
 import datetime

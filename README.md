@@ -1,4 +1,4 @@
-# video Web Downloader
+# Video Web Downloader
 
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) で動画を一時取得し、[storage.to](https://storage.to/) へ自動アップロードして有効期限 **7日間** の共有URLを発行するシンプルな Web アプリケーションです。
 

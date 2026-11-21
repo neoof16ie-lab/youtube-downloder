@@ -1,20 +1,406 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <title>yt-dlp Cloud Downloader</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>yt-dlp オンライン動画ダウンローダー</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-2: #0b1220;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --border: #334155;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --error: #ef4444;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2.5rem 1rem;
+    }
+    .container { max-width: 760px; margin: 0 auto; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    }
+    .header-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      margin-bottom: 0.75rem;
+    }
+    h1 { margin: 0 0 0.4rem; font-size: 1.6rem; }
+    .subtitle { margin: 0 0 1.5rem; color: var(--muted); font-size: 0.93rem; }
+    .input-row { display: flex; gap: 0.65rem; flex-wrap: wrap; }
+    input[type="url"] {
+      flex: 1 1 340px;
+      padding: 0.8rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      background: var(--surface-2);
+      color: var(--text);
+      outline: none;
+    }
+    input[type="url"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    }
+    button {
+      padding: 0.8rem 1.35rem;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--primary);
+      color: #fff;
+      transition: background 0.15s ease, opacity 0.15s ease;
+    }
+    button:hover:not(:disabled) { background: var(--primary-hover); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .status {
+      margin-top: 1rem;
+      padding: 0.8rem 1rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .status.info { display: block; background: rgba(59, 130, 246, 0.15); color: #bfdbfe; }
+    .status.error { display: block; background: rgba(239, 68, 68, 0.15); color: #fecaca; }
+    .status.success { display: block; background: rgba(34, 197, 94, 0.15); color: #bbf7d0; }
+
+    .share-box {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 10px;
+      background: var(--surface-2);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      display: none;
+    }
+    .share-link-row {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .share-link {
+      color: #60a5fa;
+      word-break: break-all;
+      font-weight: 600;
+      flex: 1 1 260px;
+    }
+    .btn-copy {
+      padding: 0.5rem 0.9rem;
+      font-size: 0.85rem;
+      background: #334155;
+    }
+    .btn-copy:hover { background: #475569; }
+
+    .progress-wrap {
+      margin-top: 1rem;
+      display: none;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 10px;
+      background: var(--surface-2);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--primary), var(--success));
+      transition: width 0.25s ease;
+    }
+    .progress-meta {
+      margin-top: 0.4rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .preview {
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      display: none;
+    }
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+    @media (max-width: 620px) {
+      .preview-grid { grid-template-columns: 1fr; }
+    }
+    .thumb {
+      width: 100%;
+      border-radius: 10px;
+      object-fit: cover;
+      background: var(--surface-2);
+      aspect-ratio: 16 / 9;
+    }
+    .video-title { margin: 0 0 0.4rem; font-size: 1.12rem; font-weight: 700; }
+    .video-meta { margin: 0 0 1rem; color: var(--muted); font-size: 0.86rem; }
+    .options { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+    select {
+      padding: 0.72rem 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.92rem;
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .btn-download { background: #16a34a; }
+    .btn-download:hover:not(:disabled) { background: #15803d; }
+    .footer-note {
+      margin-top: 1.25rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+  </style>
 </head>
 <body>
-  <h2>yt-dlp Cloud Downloader</h2>
-  
-  <!-- 🚥 GitHub応答コードの表示窓 -->
-  <p>GitHub応答コード: <span id="http-status-code">---</span></p>
-  <p id="status">URLを入力してください</p>
+  <div class="container">
+    <div class="card">
+      <span class="header-badge">yt-dlp + storage.to</span>
+      <h1>動画ダウンローダー</h1>
+      <p class="subtitle">URLを入力して動画を取得し、storage.to にアップロードして共有リンク（{{ expiry_days }}日間有効）を発行します。</p>
 
-  <input type="text" id="video-url" placeholder="動画のURLをペースト">
-  <button id="dl-btn">動画を取得して50GBストレージに保存</button>
+      <form id="info-form" class="input-row">
+        <input id="video-url" type="url" placeholder="https://www.youtube.com/watch?v=..." required />
+        <button id="fetch-btn" type="submit">情報を取得</button>
+      </form>
 
-  <!-- 🛠️ 処理を行う外部スクリプトを読み込む（type="module"必須） -->
-  <script type="module" src="app.js"></script>
+      <div id="status" class="status"></div>
+
+      <div id="share-box" class="share-box">
+        <div id="share-meta" style="font-size: 0.88rem; color: #bbf7d0;"></div>
+        <div class="share-link-row">
+          <a id="share-link" class="share-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+          <button id="copy-btn" class="btn-copy" type="button">URLをコピー</button>
+        </div>
+      </div>
+
+      <div id="progress-wrap" class="progress-wrap">
+        <div class="progress-bar-bg">
+          <div id="progress-fill" class="progress-bar-fill"></div>
+        </div>
+        <div class="progress-meta">
+          <span id="progress-label">待機中...</span>
+          <span id="progress-stats"></span>
+        </div>
+      </div>
+
+      <div id="preview" class="preview">
+        <div class="preview-grid">
+          <img id="thumb" class="thumb" alt="サムネイル" />
+          <div>
+            <h2 id="video-title" class="video-title"></h2>
+            <p id="video-meta" class="video-meta"></p>
+            <div class="options">
+              <select id="format-select">
+                <option value="best_mp4">最高画質 (MP4)</option>
+                <option value="1080p">フルHD (1080p以下 MP4)</option>
+                <option value="720p">標準画質 (720p以下 MP4)</option>
+                <option value="audio_mp3">音声のみ (MP3 192kbps)</option>
+                <option value="audio_m4a">音声のみ (M4A)</option>
+              </select>
+              <button id="download-btn" class="btn-download" type="button">取得してアップロード</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="footer-note">
+      最大ファイルサイズ: {{ max_mb }}MB / 保存先: storage.to（有効期限 {{ expiry_days }}日）<br />
+      対象サイトの利用規約および著作権法を遵守してご利用ください。
+    </p>
+  </div>
+
+  <script>
+    const infoForm = document.getElementById("info-form");
+    const urlInput = document.getElementById("video-url");
+    const fetchBtn = document.getElementById("fetch-btn");
+    const downloadBtn = document.getElementById("download-btn");
+    const formatSelect = document.getElementById("format-select");
+    const statusEl = document.getElementById("status");
+    const shareBox = document.getElementById("share-box");
+    const shareMeta = document.getElementById("share-meta");
+    const shareLink = document.getElementById("share-link");
+    const copyBtn = document.getElementById("copy-btn");
+    const progressWrap = document.getElementById("progress-wrap");
+    const progressFill = document.getElementById("progress-fill");
+    const progressLabel = document.getElementById("progress-label");
+    const progressStats = document.getElementById("progress-stats");
+    const previewEl = document.getElementById("preview");
+    const thumbEl = document.getElementById("thumb");
+    const titleEl = document.getElementById("video-title");
+    const metaEl = document.getElementById("video-meta");
+
+    let currentUrl = "";
+    let pollTimer = null;
+
+    function setStatus(msg, type = "info") {
+      if (!msg) {
+        statusEl.style.display = "none";
+        return;
+      }
+      statusEl.textContent = msg;
+      statusEl.className = "status " + type;
+    }
+
+    function formatDuration(sec) {
+      if (!sec && sec !== 0) return "不明";
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      return `${m}:${String(s).padStart(2, "0")}`;
+    }
+
+    copyBtn.addEventListener("click", async () => {
+      if (!shareLink.href) return;
+      await navigator.clipboard.writeText(shareLink.href);
+      copyBtn.textContent = "コピーしました";
+      setTimeout(() => { copyBtn.textContent = "URLをコピー"; }, 2000);
+    });
+
+    infoForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const url = urlInput.value.trim();
+      if (!url) return;
+
+      if (pollTimer) clearInterval(pollTimer);
+      fetchBtn.disabled = true;
+      previewEl.style.display = "none";
+      progressWrap.style.display = "none";
+      shareBox.style.display = "none";
+      setStatus("動画情報を取得しています...", "info");
+
+      try {
+        const res = await fetch("/api/info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "情報の取得に失敗しました");
+
+        currentUrl = url;
+        thumbEl.src = data.thumbnail || "";
+        titleEl.textContent = data.title || "タイトル不明";
+        metaEl.textContent = `投稿者: ${data.uploader || "不明"} / 長さ: ${formatDuration(data.duration)}`;
+        previewEl.style.display = "block";
+        setStatus("");
+      } catch (err) {
+        setStatus(err.message, "error");
+      } finally {
+        fetchBtn.disabled = false;
+      }
+    });
+
+    downloadBtn.addEventListener("click", async () => {
+      if (!currentUrl) return;
+      if (pollTimer) clearInterval(pollTimer);
+
+      downloadBtn.disabled = true;
+      fetchBtn.disabled = true;
+      shareBox.style.display = "none";
+      progressWrap.style.display = "block";
+      progressFill.style.width = "0%";
+      progressLabel.textContent = "ジョブを登録中...";
+      progressStats.textContent = "";
+      setStatus("");
+
+      try {
+        const res = await fetch("/api/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: currentUrl, preset: formatSelect.value })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "ジョブの作成に失敗しました");
+
+        const jobId = data.job_id;
+        pollTimer = setInterval(async () => {
+          try {
+            const stRes = await fetch(`/api/status/${jobId}`);
+            const st = await stRes.json();
+            if (!stRes.ok) throw new Error(st.error || "状態取得エラー");
+
+            progressFill.style.width = `${Math.min(100, st.progress || 0)}%`;
+
+            if (st.status === "queued") {
+              progressLabel.textContent = "待機中...";
+            } else if (st.status === "downloading") {
+              progressLabel.textContent = `ダウンロード中 (${(st.progress || 0).toFixed(1)}%)`;
+              progressStats.textContent = [st.speed, st.eta ? `残り ${st.eta}` : ""].filter(Boolean).join(" / ");
+            } else if (st.status === "processing") {
+              progressLabel.textContent = "変換・結合処理中...";
+              progressStats.textContent = "";
+            } else if (st.status === "uploading") {
+              progressLabel.textContent = `storage.to へアップロード中 (${(st.progress || 0).toFixed(1)}%)`;
+              progressStats.textContent = st.speed || "";
+            } else if (st.status === "done") {
+              clearInterval(pollTimer);
+              progressFill.style.width = "100%";
+              progressLabel.textContent = "完了";
+              progressStats.textContent = "";
+
+              shareMeta.textContent = `アップロード完了: ${st.filename}${st.human_size ? ` (${st.human_size})` : ""}${st.expires_at ? ` / 有効期限: ${st.expires_at}` : ""}`;
+              shareLink.href = st.share_url;
+              shareLink.textContent = st.share_url;
+              shareBox.style.display = "block";
+
+              downloadBtn.disabled = false;
+              fetchBtn.disabled = false;
+            } else if (st.status === "error") {
+              clearInterval(pollTimer);
+              progressWrap.style.display = "none";
+              setStatus(st.error || "処理に失敗しました", "error");
+              downloadBtn.disabled = false;
+              fetchBtn.disabled = false;
+            }
+          } catch (pollErr) {
+            clearInterval(pollTimer);
+            setStatus(pollErr.message, "error");
+            downloadBtn.disabled = false;
+            fetchBtn.disabled = false;
+          }
+        }, 1000);
+      } catch (err) {
+        progressWrap.style.display = "none";
+        setStatus(err.message, "error");
+        downloadBtn.disabled = false;
+        fetchBtn.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>

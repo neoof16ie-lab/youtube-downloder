@@ -1,4 +1,4 @@
-# yt-dlp + storage.to Web Downloader
+# video Web Downloader
 
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) で動画を一時取得し、[storage.to](https://storage.to/) へ自動アップロードして有効期限 **7日間** の共有URLを発行するシンプルな Web アプリケーションです。
 
@@ -16,33 +16,6 @@
 - `requirements.txt` — Python 依存パッケージ
 - `Dockerfile` — `ffmpeg` + `gunicorn` を含む本番用コンテナ定義
 
-## ローカルでの起動方法
-
-事前に **Python 3.11+** と **ffmpeg** をインストールしてください。
-
-```bash
-pip install -r requirements.txt
-python yt_dlp_web.py
-```
-
-起動後、ブラウザで `http://127.0.0.1:5000` を開きます（別ポートにする場合は `PORT=5001` を指定してください）。
-
-## Docker での起動方法
-
-```bash
-docker build -t yt-dlp-web .
-docker run -p 5000:5000 yt-dlp-web
-```
-
-## 環境変数（任意）
-
-| 変数名 | デフォルト | 説明 |
-| --- | --- | --- |
-| `PORT` | `5000` | 待ち受けポート番号 |
-| `STORAGE_TO_API_TOKEN` | 未設定 | `storage.to` の個人 API トークン（未設定時は匿名アップロード） |
-| `MAX_FILESIZE_MB` | `500` | 1ファイルあたりの最大サイズ（MB） |
-| `RATE_LIMIT_PER_MIN` | `15` | 1IPあたりの1分間リクエスト上限 |
-| `DOWNLOAD_DIR` | `./downloads` | 一時ファイルの保存先ディレクトリ |
 
 ## 注意事項
 

@@ -6,7 +6,7 @@ yt-dlp + storage.to 連携 オンライン動画ダウンロード Web アプリ
 メモリ解放 (gc.collect) が完全に終わるまで、他のユーザーからの新規リクエストは 503 で拒否します。
 
 環境変数 (任意):
-    STORAGE_TO_API_TOKEN : storage.to の個人APIトークン (未設定時は匿名アップロード)
+    STORAGE_TOKEN        : storage.to で発行した実際のAPIトークン (未設定時は匿名アップロード)
     MAX_FILESIZE_MB      : 1ファイルあたりの上限サイズ MB (デフォルト: 500)
     RATE_LIMIT_PER_MIN   : 1IPあたりの1分間リクエスト上限 (デフォルト: 15)
 
@@ -42,7 +42,11 @@ DOWNLOAD_DIR = Path(os.environ.get("DOWNLOAD_DIR", BASE_DIR / "downloads"))
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 STORAGE_TO_BASE = "https://storage.to/api"
-STORAGE_TO_API_TOKEN = os.environ.get("STORAGE_TO_API_TOKEN", "").strip()
+STORAGE_TO_API_TOKEN = (
+    os.environ.get("STORAGE_TOKEN")
+    or os.environ.get("STORAGE_TO_API_TOKEN")
+    or ""
+).strip()
 STORAGE_TO_EXPIRY_DAYS = 7
 
 MAX_FILESIZE_MB = int(os.environ.get("MAX_FILESIZE_MB", "500"))
@@ -520,7 +524,7 @@ def healthz():
 def get_video_info():
     with process_lock:
         if is_busy:
-            return jsonify({"error": "現在ほかのユーザーが処理中です。完了とメモリ解放までお待ちください。"}), 503
+            return jsonify({"error": "現在ほかのユーザーが処理中です。完了までお待ちください。"}), 503
 
     if not check_rate_limit(get_client_ip()):
         return jsonify({"error": "リクエストが多すぎます。少し待ってから再試行してください。"}), 429
@@ -571,7 +575,7 @@ def start_download():
 
     with process_lock:
         if is_busy:
-            return jsonify({"error": "現在ほかのユーザーが処理中です。完了とメモリ解放までお待ちください。"}), 503
+            return jsonify({"error": "現在ほかのユーザーが処理中です。完了までお待ちください。"}), 503
         is_busy = True
 
     job_id = uuid.uuid4().hex

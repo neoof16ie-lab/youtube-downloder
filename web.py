@@ -1,5 +1,5 @@
 """
-yt-dlp + storage.to 連携 オンライン動画ダウンロード Web アプリ (Flask + Gunicorn対応)
+yt-dlp + storage.to 連携 オンライン動画ダウンロード Web アプリ (Docker / Gunicorn 専用)
 
 メモリ消費を抑えるため、同時に1人のリクエストのみを受け付けます。
 ダウンロード・storage.to (有効期限7日) へのアップロード・一時ファイル削除・
@@ -10,11 +10,7 @@ yt-dlp + storage.to 連携 オンライン動画ダウンロード Web アプリ
     MAX_FILESIZE_MB      : 1ファイルあたりの上限サイズ MB (デフォルト: 500)
     RATE_LIMIT_PER_MIN   : 1IPあたりの1分間リクエスト上限 (デフォルト: 15)
 
-ローカル起動:
-    pip install -r requirements.txt
-    python yt_dlp_web.py
-
-本番起動 (Gunicorn):
+起動方法 (Gunicorn / Docker):
     gunicorn -w 1 --threads 8 -b 0.0.0.0:5000 yt_dlp_web:app
 """
 
@@ -401,8 +397,6 @@ def run_download_job(job_id: str, url: str, preset: str) -> None:
         "progress_hooks": [progress_hook],
     }
 
-    # TVer等のHLS配信でも映像+音声を確実に拾えるよう、入力側の [ext=mp4] 制限を外し、
-    # 出力時に merge_output_format で mp4 にまとめる
     if preset == "best_mp4":
         ydl_opts["format"] = "bv*+ba/b"
         ydl_opts["merge_output_format"] = "mp4"
@@ -612,8 +606,3 @@ def job_status(job_id: str):
             "human_size": job.human_size,
             "error": job.error,
         })
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    app.run(host="127.0.0.1", port=port, debug=False)

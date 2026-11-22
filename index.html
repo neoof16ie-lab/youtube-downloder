@@ -365,7 +365,7 @@
               progressLabel.textContent = "変換・結合処理中...";
               progressStats.textContent = "";
             } else if (st.status === "uploading") {
-              progressLabel.textContent = `storage.to へアップロード中 (${(st.progress || 0).toFixed(1)}%)`;
+              progressLabel.textContent = ` アップロード中 (${(st.progress || 0).toFixed(1)}%)`;
               progressStats.textContent = st.speed || "";
             } else if (st.status === "done") {
               clearInterval(pollTimer);

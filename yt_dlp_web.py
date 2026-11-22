@@ -1,9 +1,18 @@
 """
-yt-dlp + storage.to 連携 オンライン動画ダウンロード Web アプリ
+yt-dlp + storage.to 連携 オンライン動画ダウンロード Web アプリ (Docker / Gunicorn 専用)
 
+GitHub Pages などの別ドメインに置いた index.html からも通信できるよう CORS に対応しています。
 メモリ消費を抑えるため、同時に1人のリクエストのみを受け付けます。
 ダウンロード・storage.to (有効期限7日) へのアップロード・一時ファイル削除・
-メモリ解放が完全に終わるまで、他のユーザーからの新規リクエストは 503 で拒否します。
+メモリ解放 (gc.collect) が完全に終わるまで、他のユーザーからの新規リクエストは 503 で拒否します。
+
+環境変数 (任意):
+    ALLOWED_ORIGIN       : CORS を許可するフロントエンドのURL (例: https://user.github.io / 未設定時は *)
+    STORAGE_TOKEN        : storage.to で発行した実際のAPIトークン (未設定時は匿名アップロード)
+    MAX_FILESIZE_MB      : 1ファイルあたりの上限サイズ MB (デフォルト: 500)
+    RATE_LIMIT_PER_MIN   : 1IPあたりの1分間リクエスト上限 (デフォルト: 15)
+    YTDLP_PROXY          : yt-dlp 用プロキシURL (例: http://user:pass@host:port / socks5://host:port)
+    YTDLP_PROXY_DOMAINS  : プロキシを適用するドメイン (カンマ区切り、全サイトは * / デフォルト: tver.jp)
 
 起動方法 (Gunicorn / Docker):
     gunicorn -w 1 --threads 8 -b 0.0.0.0:5000 yt_dlp_web:app
@@ -47,8 +56,10 @@ STORAGE_TO_EXPIRY_DAYS = 7
 
 MAX_FILESIZE_MB = int(os.environ.get("MAX_FILESIZE_MB", "500"))
 RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "15"))
-YTDLP_PROXY = os.environ.get("YTDLP_PROXY", "").strip()
-YTDLP_PROXY_DOMAINS = os.environ.get("YTDLP_PROXY_DOMAINS", "tver.jp").strip()
+YTDLP_PROXY = os.environ.get("YTDLP_PROXY", "").strip(" \"'")
+YTDLP_PROXY_DOMAINS = (
+    os.environ.get("YTDLP_PROXY_DOMAINS", "").strip(" \"'") or "tver.jp"
+)
 
 # 同時実行は必ず1ジョブに制限
 executor = ThreadPoolExecutor(max_workers=1)
@@ -467,7 +478,10 @@ def run_download_job(job_id: str, url: str, preset: str) -> None:
     info = None
     uploaded = None
     try:
-        print(f"[{tag}] yt-dlp start: {url} ({preset}) proxy={bool(ydl_opts.get('proxy'))}", flush=True)
+        print(
+            f"[{tag}] yt-dlp start: {url} ({preset}) proxy_applied={bool(ydl_opts.get('proxy'))} domains={YTDLP_PROXY_DOMAINS}",
+            flush=True,
+        )
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             print(
@@ -576,6 +590,7 @@ def get_video_info():
         "socket_timeout": 30,
     }
     apply_proxy_if_needed(ydl_opts, url)
+    print(f"[info] url={url} proxy_applied={bool(ydl_opts.get('proxy'))} domains={YTDLP_PROXY_DOMAINS}", flush=True)
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)

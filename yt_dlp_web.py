@@ -1,9 +1,18 @@
 """
 yt-dlp + storage.to 連携 オンライン動画ダウンロード Web アプリ (Docker / Gunicorn 専用)
 
+GitHub Pages などの別ドメインに置いた index.html からも通信できるよう CORS に対応しています。
 メモリ消費を抑えるため、同時に1人のリクエストのみを受け付けます。
 ダウンロード・storage.to (有効期限7日) へのアップロード・一時ファイル削除・
-メモリ解放が完全に終わるまで、他のユーザーからの新規リクエストは 503 で拒否します。
+メモリ解放 (gc.collect) が完全に終わるまで、他のユーザーからの新規リクエストは 503 で拒否します。
+
+環境変数 (任意):
+    ALLOWED_ORIGIN       : CORS を許可するフロントエンドのURL (例: https://user.github.io / 未設定時は *)
+    STORAGE_TOKEN        : storage.to で発行した実際のAPIトークン (未設定時は匿名アップロード)
+    MAX_FILESIZE_MB      : 1ファイルあたりの上限サイズ MB (デフォルト: 500)
+    RATE_LIMIT_PER_MIN   : 1IPあたりの1分間リクエスト上限 (デフォルト: 15)
+    YTDLP_PROXY          : yt-dlp 用プロキシURL (例: http://user:pass@host:port / socks5://host:port)
+    YTDLP_PROXY_DOMAINS  : プロキシを適用するドメイン (カンマ区切り、全サイトは * / デフォルト: tver.jp)
 
 起動方法 (Gunicorn / Docker):
     gunicorn -w 1 --threads 8 -b 0.0.0.0:5000 yt_dlp_web:app
@@ -25,7 +34,7 @@ from typing import Callable
 from urllib.parse import urlparse
 import uuid
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, make_response, render_template, request
 import requests
 import yt_dlp
 
@@ -36,6 +45,7 @@ app = Flask(__name__, template_folder=str(BASE_DIR))
 DOWNLOAD_DIR = Path(os.environ.get("DOWNLOAD_DIR", BASE_DIR / "downloads"))
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*").strip() or "*"
 STORAGE_TO_BASE = "https://storage.to/api"
 STORAGE_TO_API_TOKEN = (
     os.environ.get("STORAGE_TOKEN")
@@ -46,6 +56,8 @@ STORAGE_TO_EXPIRY_DAYS = 7
 
 MAX_FILESIZE_MB = int(os.environ.get("MAX_FILESIZE_MB", "500"))
 RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "15"))
+YTDLP_PROXY = os.environ.get("YTDLP_PROXY", "").strip()
+YTDLP_PROXY_DOMAINS = os.environ.get("YTDLP_PROXY_DOMAINS", "tver.jp").strip()
 
 # 同時実行は必ず1ジョブに制限
 executor = ThreadPoolExecutor(max_workers=1)
@@ -56,6 +68,26 @@ is_busy = False
 
 # 匿名アップロード時に一貫して使うビジタートークン
 DEFAULT_VISITOR_TOKEN = uuid.uuid4().hex
+
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        resp = make_response("", 204)
+        resp.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        resp.headers["Access-Control-Max-Age"] = "86400"
+        return resp
+    return None
+
+
+@app.after_request
+def add_cors_headers(resp):
+    resp.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return resp
 
 
 @dataclass
@@ -170,6 +202,20 @@ def is_safe_public_url(url: str) -> tuple[bool, str]:
             return False, "ローカルまたはプライベートネットワークへのアクセスは禁止されています。"
 
     return True, ""
+
+
+def apply_proxy_if_needed(ydl_opts: dict, url: str) -> None:
+    """YTDLP_PROXY が設定されている場合、対象ドメイン（デフォルト tver.jp）にプロキシを適用する"""
+    if not YTDLP_PROXY:
+        return
+    if YTDLP_PROXY_DOMAINS == "*":
+        ydl_opts["proxy"] = YTDLP_PROXY
+        return
+
+    host = (urlparse(url).hostname or "").lower()
+    domains = [d.strip().lower() for d in YTDLP_PROXY_DOMAINS.split(",") if d.strip()]
+    if any(host == d or host.endswith(f".{d}") for d in domains):
+        ydl_opts["proxy"] = YTDLP_PROXY
 
 
 def sanitize_filename(name: str) -> str:
@@ -395,6 +441,7 @@ def run_download_job(job_id: str, url: str, preset: str) -> None:
         "max_filesize": MAX_FILESIZE_MB * 1024 * 1024,
         "progress_hooks": [progress_hook],
     }
+    apply_proxy_if_needed(ydl_opts, url)
 
     if preset == "best_mp4":
         ydl_opts["format"] = "bv*+ba/b"
@@ -429,7 +476,7 @@ def run_download_job(job_id: str, url: str, preset: str) -> None:
     info = None
     uploaded = None
     try:
-        print(f"[{tag}] yt-dlp start: {url} ({preset})", flush=True)
+        print(f"[{tag}] yt-dlp start: {url} ({preset}) proxy={bool(ydl_opts.get('proxy'))}", flush=True)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             print(
@@ -519,7 +566,7 @@ def healthz():
 def get_video_info():
     with process_lock:
         if is_busy:
-            return jsonify({"error": "現在ほかのユーザーが処理中です。完了までお待ちください。"}), 503
+            return jsonify({"error": "現在ほかのユーザーが処理中です。完了とメモリ解放までお待ちください。"}), 503
 
     if not check_rate_limit(get_client_ip()):
         return jsonify({"error": "リクエストが多すぎます。少し待ってから再試行してください。"}), 429
@@ -537,6 +584,7 @@ def get_video_info():
         "noplaylist": True,
         "socket_timeout": 30,
     }
+    apply_proxy_if_needed(ydl_opts, url)
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -570,7 +618,7 @@ def start_download():
 
     with process_lock:
         if is_busy:
-            return jsonify({"error": "現在ほかのユーザーが処理中です。完了までお待ちください。"}), 503
+            return jsonify({"error": "現在ほかのユーザーが処理中です。完了とメモリ解放までお待ちください。"}), 503
         is_busy = True
 
     job_id = uuid.uuid4().hex
